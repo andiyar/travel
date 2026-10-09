@@ -91,18 +91,19 @@ button{font:inherit;color:inherit;cursor:pointer}
 
 /* sticky venue nav + tools */
 .bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-block:1px solid var(--line);margin-top:30px}
-.bar .wrap{display:flex;flex-direction:column;gap:8px;padding-block:10px}
+.bar .wrap{display:flex;flex-direction:column;gap:8px;padding-block:8px}
 .chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
 .chip{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:5px 12px;font-size:.85rem;text-decoration:none;color:var(--ink);white-space:nowrap}
 .chip[data-v]{border-color:color-mix(in srgb,var(--v) 45%,var(--line))}
-.chip[data-v]:hover{background:color-mix(in srgb,var(--v) 12%,var(--surface))}
-.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.search{flex:1 1 220px;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:var(--r);padding:8px 12px;font:inherit}
-.toggle{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:7px 11px;font-size:.85rem}
+.chip[aria-current="true"]{background:var(--v);border-color:var(--v);color:var(--surface);font-weight:700}
+.chip[data-v]:not([aria-current="true"]):hover{background:color-mix(in srgb,var(--v) 12%,var(--surface))}
+.tools{display:flex;gap:6px;align-items:center}
+.search{flex:1 1 auto;width:0;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:var(--r);padding:8px 12px;font:inherit}
+.toggle{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:7px 10px;font-size:.82rem;white-space:nowrap}
 .toggle[aria-pressed="true"]{background:var(--gold-soft);border-color:var(--gold);color:var(--ink)}
 
 /* venue card */
-.venue{margin-top:34px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;scroll-margin-top:130px}
+.venue{margin-top:20px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;scroll-margin-top:110px}
 .vhead{position:relative;padding:26px 22px 20px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--v) 7%,var(--surface))}
 .vhead::before{content:"";position:absolute;inset:0 0 auto 0;height:8px;background:var(--pat)}
 [data-v="solis"]{--pat:linear-gradient(90deg,var(--v),color-mix(in srgb,var(--v) 40%,#e9c46a))}
@@ -214,7 +215,7 @@ footer p{max-width:72ch}
     <div class="wrap">
       <nav class="chips" id="vnav" aria-label="Restaurants"></nav>
       <div class="tools">
-        <input id="q" class="search" type="search" placeholder="Search every menu: pizza, kokoda, mocktail…" aria-label="Search every menu">
+        <input id="q" class="search" type="search" placeholder="Search all menus" aria-label="Search every menu">
         <button id="kidsOnly" class="toggle" aria-pressed="false">Kid picks</button>
         <button id="noAlc" class="toggle" aria-pressed="false">Hide alcohol</button>
       </div>
@@ -318,6 +319,7 @@ $('#planBody').addEventListener('click', e => {
   const v = a.dataset.go, meal = a.dataset.meal;
   const pick = byVenue[v].find(m => m.kind !== 'drinks' && new RegExp(meal, 'i').test(m.name) && !/green/i.test(m.name)) || byVenue[v].find(m => m.kind === 'food');
   if (pick) { S.tab[v] = pick.id; store.set('fj.tab', S.tab); renderVenue(v); }
+  e.preventDefault(); showVenue(v, true);
 });
 
 /* ---------- items ---------- */
@@ -371,11 +373,24 @@ function renderVenue(v) {
   el.innerHTML = venueHead(v) + `<div class="tabs" role="tablist">${tabs}</div><div class="menu">${menuHTML(cur)[0]}</div>`;
   paintAddButtons();
 }
+S.venue = store.get('fj.venue', D.order[0]);
 function renderVenues() {
   $('#venues').innerHTML = D.order.map(v => `<section class="venue" id="v-${v}" data-v="${v}"></section>`).join('');
   D.order.forEach(renderVenue);
   $('#vnav').innerHTML = D.order.map(v => `<a class="chip" data-v="${v}" href="#v-${v}">${esc(D.venues[v].name)}</a>`).join('');
+  const h = location.hash.replace('#v-', '');
+  showVenue(D.venues[h] ? h : S.venue, false);
 }
+function showVenue(v, scroll) {
+  S.venue = v; store.set('fj.venue', v);
+  document.querySelectorAll('#venues .venue').forEach(el => el.hidden = el.dataset.v !== v);
+  document.querySelectorAll('#vnav .chip').forEach(c => c.setAttribute('aria-current', c.dataset.v === v ? 'true' : 'false'));
+  const chip = document.querySelector(`#vnav .chip[data-v="${v}"]`);
+  if (chip) chip.scrollIntoView({block: 'nearest', inline: 'center'});
+  if ($('#q').value) { $('#q').value = ''; renderSearch(); }
+  if (scroll) document.getElementById('v-' + v).scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'});
+}
+$('#vnav').addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return; e.preventDefault(); showVenue(c.dataset.v, true); });
 $('#venues').addEventListener('click', e => {
   const t = e.target.closest('[data-tab]');
   if (t) { const v = t.closest('.venue').dataset.v; S.tab[v] = +t.dataset.tab; store.set('fj.tab', S.tab); renderVenue(v); return; }
